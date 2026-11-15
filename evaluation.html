@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}RailPulse | Model Evaluation{% endblock %}
+{% block h1 %}Model Evaluation{% endblock %}
+{% block subtitle %}How accurate the model is on data it has never seen, and what drives its predictions.{% endblock %}
+
+{% block content %}
+{% if not metrics %}
+<div class="card"><div class="body"><div class="empty">
+  <div class="empty-icon">📊</div><strong>Metrics not available yet</strong>
+  <p>Run <code>python train_model.py</code> (or just open the dashboard once) to train the model and generate the evaluation.</p>
+</div></div></div>
+{% else %}
+<section class="stats four">
+  <div class="stat"><div class="stat-top"><span>Mean absolute error</span><span class="stat-icon">◷</span></div><div class="stat-value">{{ metrics.mae_minutes }} min</div><div class="stat-foot">average miss on test data</div></div>
+  <div class="stat"><div class="stat-top"><span>RMSE</span><span class="stat-icon">√</span></div><div class="stat-value">{{ metrics.rmse_minutes }} min</div><div class="stat-foot">penalises large misses</div></div>
+  <div class="stat"><div class="stat-top"><span>R² score</span><span class="stat-icon">✦</span></div><div class="stat-value">{{ metrics.r2_score }}</div><div class="stat-foot">share of delay variation explained</div></div>
+  <div class="stat"><div class="stat-top"><span>Within 5 minutes</span><span class="stat-icon">◎</span></div><div class="stat-value">{{ metrics.within_5_min_pct }}%</div><div class="stat-foot">{{ metrics.within_10_min_pct }}% within 10 min</div></div>
+</section>
+
+<div class="card">
+  <div class="card-head"><div><div class="card-title">Does the model beat simple rules?</div><div class="card-desc">MAE in minutes, lower is better</div></div><span class="pill">BASELINES</span></div>
+  <div class="body"><div class="bars" id="baselines"></div>
+  <div class="hint" id="gain"></div></div>
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="card-head"><div><div class="card-title">Actual vs predicted delay</div><div class="card-desc">Points on the dashed line are perfect predictions</div></div><span class="pill">TEST SET</span></div>
+    <div class="body" id="scatter"></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><div><div class="card-title">Prediction error distribution</div><div class="card-desc">Centred on zero means no systematic bias</div></div><span class="pill">RESIDUALS</span></div>
+    <div class="body" id="hist"></div>
+  </div>
+</div>
+
+<div class="grid-2" id="importance">
+  <div class="card">
+    <div class="card-head"><div><div class="card-title">What drives the prediction?</div><div class="card-desc">Feature importance (%)</div></div><span class="pill">{{ metrics.model_name.split(' (')[0]|upper }}</span></div>
+    <div class="body"><div class="bars" id="imp"></div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><div><div class="card-title">Error by train category</div><div class="card-desc">MAE in minutes per category</div></div><span class="pill">BREAKDOWN</span></div>
+    <div class="body"><div class="bars" id="types"></div>
+      <div class="metric-line" style="margin-top:14px"><span>90% of predictions are within</span><strong>±{{ metrics.interval90_minutes }} min</strong></div>
+      <div class="metric-line"><span>Training / test records</span><strong>{{ metrics.train_rows }} / {{ metrics.test_rows }}</strong></div>
+      <div class="metric-line"><span>Model</span><strong>{{ metrics.model_name }}</strong></div>
+    </div>
+  </div>
+</div>
+
+<div class="note"><strong>Dataset note:</strong> {{ metrics.dataset_rows }} records, <em>{{ metrics.dataset_type }}</em>. Results on simulated data show the pipeline works; they are not evidence of real-world accuracy until the model is trained on verified railway records.</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if metrics %}
+<script>
+const M = {{ metrics|tojson }};
+const base = M.baselines;
+RP.bars(document.getElementById("baselines"),
+  base.map((b, i) => ({ label: b.name, value: b.mae, cls: i === base.length - 1 ? "hl" : "gray" })), { unit: " min" });
+const best = Math.min(...base.slice(0, -1).map(b => b.mae)), mine = base[base.length - 1].mae;
+document.getElementById("gain").textContent =
+  `The model's error is ${((1 - mine / best) * 100).toFixed(0)}% lower than the best simple baseline (${best.toFixed(2)} min).`;
+RP.scatter(document.getElementById("scatter"), M.scatter);
+RP.hist(document.getElementById("hist"), M.residual_hist.counts, M.residual_hist.edges);
+RP.bars(document.getElementById("imp"), M.feature_importance.map(f => ({ label: f.feature, value: f.importance })), { unit: "%" });
+RP.bars(document.getElementById("types"), M.by_type.map(t => ({ label: t.type, value: t.mae, cls: "w" })), { unit: " min", narrow: true });
+if (location.hash) setTimeout(() => document.querySelector(location.hash)?.scrollIntoView({ behavior: "smooth" }), 200);
+</script>
+{% endif %}
+{% endblock %}

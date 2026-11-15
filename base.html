@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}RailPulse | AI Train ETA{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script>try{document.documentElement.setAttribute("data-theme",localStorage.getItem("rp-theme")||"light")}catch(e){}</script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <a class="brand" href="{{ url_for('home') }}">
+      <div class="logo">🚆</div>
+      <div><div class="brand-name">RailPulse AI</div><div class="brand-sub">INTELLIGENT RAIL SYSTEM</div></div>
+    </a>
+    <div class="nav-label">WORKSPACE</div>
+    <a class="nav-item {{ 'active' if page == 'home' }}" href="{{ url_for('home') }}"><span class="nav-icon">▦</span> ETA Dashboard</a>
+    <a class="nav-item {{ 'active' if page == 'forecast' }}" href="{{ url_for('forecast') }}"><span class="nav-icon">◷</span> Delay Forecast</a>
+    <a class="nav-item {{ 'active' if page == 'evaluation' }}" href="{{ url_for('evaluation') }}"><span class="nav-icon">▤</span> Model Evaluation</a>
+    <div class="nav-label" style="margin-top:28px">PROJECT</div>
+    <a class="nav-item" href="{{ url_for('evaluation') }}#importance"><span class="nav-icon">⚙</span> {{ (metrics.model_name if metrics else 'XGBoost').split(' (')[0] }} Engine</a>
+    <div class="side-note">
+      <strong>Prototype environment</strong>
+      <p>This academic prototype uses a trained gradient-boosting model. Connect verified railway data for operational use.</p>
+    </div>
+  </aside>
+  <main>
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">AI-powered railway analytics</div>
+        <h1>{% block h1 %}{% endblock %}</h1>
+        <div class="subtitle">{% block subtitle %}{% endblock %}</div>
+      </div>
+      <div class="top-actions">
+        <button class="theme-btn" id="themeBtn" title="Toggle dark mode" aria-label="Toggle dark mode">🌙</button>
+        <div class="profile"><div class="avatar">AI</div><span>Project Demonstration</span></div>
+      </div>
+    </div>
+    {% block content %}{% endblock %}
+    <div class="footer">RAILPULSE AI · Academic implementation prototype · Gradient-boosted regression<br>Predictions are estimates, not official live railway information.</div>
+  </main>
+</div>
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

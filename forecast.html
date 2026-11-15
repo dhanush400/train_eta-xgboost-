@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "_fields.html" import fields, form_script %}
+{% block title %}RailPulse | Delay Forecast{% endblock %}
+{% block h1 %}Delay Forecast{% endblock %}
+{% block subtitle %}See how the delay is expected to change stop by stop, and what-if weather or congestion changes it.{% endblock %}
+
+{% block content %}
+<section class="content-grid">
+  <div class="card">
+    <div class="card-head">
+      <div><div class="card-title">Journey to forecast</div><div class="card-desc">Same inputs as the ETA dashboard</div></div>
+      <span class="pill">INPUT DATA</span>
+    </div>
+    <div class="error" id="err" style="display:none"></div>
+    <form id="journeyForm" onsubmit="return false">
+      {{ fields(request.args) }}
+      <button class="submit" type="submit" id="runBtn">◷ &nbsp; Run stop-by-stop forecast</button>
+      <div class="hint">The model is rolled forward one stop at a time: each predicted delay becomes the “previous station delay” of the next stop.</div>
+    </form>
+  </div>
+
+  <div class="right-col" id="out">
+    <div class="card"><div class="body"><div class="empty">
+      <div class="empty-icon">📈</div><strong>No forecast yet</strong>
+      <p>Fill in the journey (or pick an example) and run the forecast to see delay along the route.</p>
+    </div></div></div>
+  </div>
+</section>
+
+<section id="detail" style="display:none">
+  <div class="stats four" style="margin-top:18px">
+    <div class="stat"><div class="stat-top"><span>Delay at destination</span><span class="stat-icon">⚑</span></div><div class="stat-value" id="k1">—</div><div class="stat-foot" id="k1f"></div></div>
+    <div class="stat"><div class="stat-top"><span>Predicted arrival</span><span class="stat-icon">⏱</span></div><div class="stat-value" id="k2" style="font-size:17px;margin-top:14px">—</div><div class="stat-foot" id="k2f"></div></div>
+    <div class="stat"><div class="stat-top"><span>Worst point</span><span class="stat-icon">▲</span></div><div class="stat-value" id="k3">—</div><div class="stat-foot" id="k3f"></div></div>
+    <div class="stat"><div class="stat-top"><span>Delayed stops</span><span class="stat-icon">◉</span></div><div class="stat-value" id="k4">—</div><div class="stat-foot">stops with &gt; 5 min delay</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><div><div class="card-title">Delay along the route</div><div class="card-desc" id="trend"></div></div><span class="pill">FORECAST</span></div>
+    <div class="body" id="lineChart"></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><div><div class="card-title">What if the weather changes?</div><div class="card-desc">Delay at destination under each weather level</div></div><span class="pill">SCENARIO</span></div>
+      <div class="body"><div class="bars" id="wWeather"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><div class="card-title">What if congestion changes?</div><div class="card-desc">Delay at destination under each congestion level</div></div><span class="pill">SCENARIO</span></div>
+      <div class="body"><div class="bars" id="wCong"></div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <div class="card-head"><div><div class="card-title">Stop-by-stop table</div><div class="card-desc">Scheduled vs predicted time at each stop</div></div><span class="pill">DETAIL</span></div>
+    <div class="body"><table><thead><tr><th>Stop</th><th>Scheduled</th><th>Predicted</th><th>Delay</th><th>Status</th></tr></thead><tbody id="rows"></tbody></table></div>
+  </div>
+  <div class="note"><strong>How to read this:</strong> the forecast chains the model’s own predictions, so errors can accumulate over many stops. Treat later stops as less certain than the first few.</div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ form_script() }}
+<script>
+const form = document.getElementById("journeyForm"), $ = id => document.getElementById(id);
+async function run() {
+  if (!form.reportValidity()) return;
+  const btn = $("runBtn"); btn.textContent = "Forecasting…"; form.classList.add("loading");
+  $("err").style.display = "none";
+  try {
+    const r = await fetch("/api/forecast", { method: "POST", body: new FormData(form) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Forecast failed");
+    render(d);
+  } catch (e) { $("err").textContent = e.message; $("err").style.display = "block"; }
+  btn.textContent = "◷   Run stop-by-stop forecast"; form.classList.remove("loading");
+}
+function badge(t, s) { return `<span class="badge ${t}">${s}</span>`; }
+function render(d) {
+  const s = d.stops, tone = d.final_delay <= 5 ? "ok" : d.final_delay <= 30 ? "warn" : "bad";
+  $("out").innerHTML = `<div class="card"><div class="card-head"><div><div class="card-title">Train ${d.train_number}</div><div class="card-desc">Forecast summary</div></div><span class="pill">RESULT</span></div><div class="body">
+    <div class="result-banner"><small>PREDICTED ARRIVAL AT DESTINATION</small><div class="eta-time">${d.final_eta}</div><div class="result-meta"><span>Scheduled: ${d.scheduled}</span><span>Delay is ${d.trend}</span></div></div>
+    <div class="gauge-wrap"><div class="gauge" id="gauge"></div><div class="kv">
+      <div><span>Delay now</span><strong>${s[0].delay} min</strong></div>
+      <div><span>Delay at destination</span><strong>${d.final_delay} min</strong></div>
+      <div><span>Outlook</span>${badge(tone, tone === "ok" ? "On Time" : tone === "warn" ? "Slightly Delayed" : "Highly Delayed")}</div></div></div></div></div>`;
+  RP.gauge($("gauge"), d.final_delay);
+  $("detail").style.display = "block";
+  $("k1").textContent = d.final_delay + " min"; $("k1f").textContent = "vs " + s[0].delay + " min now";
+  $("k2").textContent = d.final_eta; $("k2f").textContent = "scheduled " + d.scheduled.slice(11);
+  $("k3").textContent = d.peak_delay + " min"; $("k3f").textContent = "at " + d.peak_label;
+  $("k4").textContent = d.delayed_stops + " / " + (s.length - 1);
+  $("trend").textContent = "Delay is " + d.trend + " towards the destination";
+  RP.line($("lineChart"), s.map(x => x.label), s.map(x => x.delay));
+  RP.bars($("wWeather"), d.whatif_weather.map((w, i) => ({ label: w.label, value: w.value, cls: i === 0 ? "hl" : i === 3 ? "w" : "" })), { unit: " min", narrow: true });
+  RP.bars($("wCong"), d.whatif_congestion.map((w, i) => ({ label: w.label, value: w.value, cls: i === 0 ? "hl" : i === 3 ? "w" : "" })), { unit: " min", narrow: true });
+  $("rows").innerHTML = s.slice(1).map(x => `<tr><td><strong>${x.label}</strong></td><td>${x.sched}</td><td>${x.time}</td><td>${x.delay} min</td><td>${badge(x.tone, x.status)}</td></tr>`).join("");
+  $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+form.addEventListener("submit", e => { e.preventDefault(); run(); });
+form.addEventListener("sample-filled", run);
+if (new URLSearchParams(location.search).has("train_number")) run();
+</script>
+{% endblock %}

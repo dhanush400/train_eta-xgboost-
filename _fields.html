@@ -1,0 +1,59 @@
+{% macro fields(f) %}
+<div class="samples">
+  <span>Try an example</span>
+  <button type="button" class="chip" data-sample="ontime">On-time Rajdhani</button>
+  <button type="button" class="chip" data-sample="moderate">Monsoon express</button>
+  <button type="button" class="chip" data-sample="heavy">Heavy disruption</button>
+</div>
+<div class="section-label">Train schedule</div>
+<div class="fields">
+  <div><label>Train number</label>
+    <input name="train_number" placeholder="e.g. 12627" required value="{{ f.get('train_number','') }}"></div>
+  <div><label>Scheduled arrival date &amp; time</label>
+    <input type="datetime-local" name="scheduled_arrival" required value="{{ f.get('scheduled_arrival','') }}"></div>
+  <div><label>Distance to destination (km)</label>
+    <input type="number" name="distance_km" min="0" step="0.1" placeholder="e.g. 250" required value="{{ f.get('distance_km','') }}"></div>
+  <div><label>Remaining stops</label>
+    <input type="number" name="remaining_stops" min="0" placeholder="e.g. 5" required value="{{ f.get('remaining_stops','') }}"></div>
+</div>
+<div class="section-label" style="margin-top:22px">Dynamic operating conditions</div>
+<div class="fields">
+  <div><label>Previous station delay (minutes)</label>
+    <input type="number" name="previous_delay_min" min="0" step="0.1" placeholder="e.g. 12" required value="{{ f.get('previous_delay_min','') }}"></div>
+  <div><label>Weather severity</label>
+    <select name="weather_severity">
+      {% for v, n in [('0','Normal'),('1','Mild'),('2','Moderate'),('3','Severe')] %}
+      <option value="{{ v }}" {{ 'selected' if f.get('weather_severity','0') == v }}>{{ n }}</option>{% endfor %}
+    </select></div>
+  <div><label>Railway congestion index (0–10)</label>
+    <input type="number" name="congestion_index" min="0" max="10" placeholder="0 to 10" required value="{{ f.get('congestion_index','') }}"></div>
+  <div><label>Train category</label>
+    <select name="train_type_code">
+      {% for v, n in [('0','Express'),('1','Superfast'),('2','Passenger'),('3','Rajdhani'),('4','Other')] %}
+      <option value="{{ v }}" {{ 'selected' if f.get('train_type_code','0') == v }}>{{ n }}</option>{% endfor %}
+    </select></div>
+</div>
+{% endmacro %}
+
+{% macro form_script() %}
+<script>
+(function () {
+  const form = document.getElementById("journeyForm");
+  if (!form) return;
+  const S = {
+    ontime:   {train_number:"12951", distance_km:120, remaining_stops:3,  previous_delay_min:0,  weather_severity:0, congestion_index:2, train_type_code:3},
+    moderate: {train_number:"16525", distance_km:480, remaining_stops:8,  previous_delay_min:14, weather_severity:1, congestion_index:5, train_type_code:0},
+    heavy:    {train_number:"12628", distance_km:900, remaining_stops:14, previous_delay_min:45, weather_severity:3, congestion_index:9, train_type_code:2},
+  };
+  const dt = form.elements["scheduled_arrival"];
+  const nowLocal = () => { const d = new Date(Date.now() + 3 * 3600e3); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  if (!dt.value) dt.value = nowLocal();
+  document.querySelectorAll("[data-sample]").forEach(b => b.addEventListener("click", () => {
+    const s = S[b.dataset.sample];
+    Object.entries(s).forEach(([k, v]) => form.elements[k].value = v);
+    if (!dt.value) dt.value = nowLocal();
+    form.dispatchEvent(new CustomEvent("sample-filled"));
+  }));
+})();
+</script>
+{% endmacro %}

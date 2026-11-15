@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% from "_fields.html" import fields, form_script %}
+{% block h1 %}Train ETA Prediction{% endblock %}
+{% block subtitle %}Forecast arrival time and expected delay from journey conditions.{% endblock %}
+
+{% block content %}
+<div class="status-strip"><span class="dot"></span><strong>Prediction engine ready</strong><span>·</span> Enter journey details or pick an example to generate an estimate.</div>
+
+<section class="stats">
+  <div class="stat">
+    <div class="stat-top"><span>Prediction algorithm</span><span class="stat-icon">✦</span></div>
+    <div class="stat-value">{{ (metrics.model_name if metrics else 'XGBoost').split(' (')[0] }}</div>
+    <div class="stat-foot">Gradient-boosted decision trees</div>
+  </div>
+  <div class="stat">
+    <div class="stat-top"><span>Model input features</span><span class="stat-icon">⌘</span></div>
+    <div class="stat-value">09</div>
+    <div class="stat-foot">Journey and operating conditions</div>
+  </div>
+  <div class="stat">
+    <div class="stat-top"><span>Typical error (MAE)</span><span class="stat-icon">◷</span></div>
+    <div class="stat-value">{% if metrics %}±{{ metrics.mae_minutes }} min{% else %}—{% endif %}</div>
+    <div class="stat-foot">{% if metrics %}{{ metrics.within_5_min_pct }}% of test predictions within 5 min{% else %}Train the model to see accuracy{% endif %}</div>
+  </div>
+</section>
+
+<section class="content-grid">
+  <div class="card">
+    <div class="card-head">
+      <div><div class="card-title">Journey information</div><div class="card-desc">Provide current train and operating details</div></div>
+      <span class="pill">INPUT DATA</span>
+    </div>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="POST" id="journeyForm">
+      {{ fields(request.form) }}
+      <button class="submit" type="submit">✦ &nbsp; Generate ETA Prediction</button>
+      <div class="hint">The model predicts delay from the features above and adds it to the scheduled arrival to get the ETA.</div>
+    </form>
+  </div>
+
+  <div class="right-col">
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Prediction result</div><div class="card-desc">Model-generated arrival estimate</div></div>
+        <span class="pill">OUTPUT</span>
+      </div>
+      <div class="body">
+        {% if result %}
+        <div class="result-banner">
+          <small>PREDICTED ARRIVAL TIME · TRAIN {{ result.train_number }}</small>
+          <div class="eta-time">{{ result.predicted_eta }}</div>
+          <div class="result-meta"><span>Scheduled: {{ result.scheduled_eta }}</span><span>{{ result.category }} · {{ result.distance }} km</span></div>
+        </div>
+
+        <div class="gauge-wrap">
+          <div class="gauge" id="gauge"></div>
+          <div class="kv">
+            <div><span>Train status</span><span class="badge {{ result.tone }}">{{ result.status }}</span></div>
+            <div><span>Likely delay range</span><strong>{{ result.low }}–{{ result.high }} min</strong></div>
+            <div><span>Weather</span><strong>{{ result.weather }}</strong></div>
+            <div><span>Congestion</span><strong>{{ result.congestion }} / 10</strong></div>
+          </div>
+        </div>
+
+        <div class="route-cap"><span>Current position</span><span>Destination · {{ result.remaining }} stop{{ '' if result.remaining == 1 else 's' }} left</span></div>
+        <div class="route">
+          <div class="route-line"></div><div class="route-fill"></div>
+          <div class="route-stops">
+            {% for i in range(result.stops + 1) %}<div class="rs {{ ('end ' ~ result.tone) if loop.last }}"></div>{% endfor %}
+          </div>
+          <div class="route-train">🚆</div>
+        </div>
+        <a class="linkbtn" href="{{ url_for('forecast', **forecast_args) }}">See stop-by-stop forecast for this train →</a>
+        {% else %}
+        <div class="empty">
+          <div class="empty-icon">⏱️</div>
+          <strong>Awaiting journey details</strong>
+          <p>Complete the form and select “Generate ETA Prediction” to see the estimated arrival time, delay gauge and route progress.</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Model performance</div><div class="card-desc">Evaluation on held-out test data</div></div>
+        <span class="pill">METRICS</span>
+      </div>
+      <div class="body" style="padding-top:12px;padding-bottom:12px">
+        {% if metrics %}
+          <div class="metric-line"><span>Mean Absolute Error (MAE)</span><strong>{{ metrics.mae_minutes }} min</strong></div>
+          <div class="metric-line"><span>Root Mean Squared Error</span><strong>{{ metrics.rmse_minutes }} min</strong></div>
+          <div class="metric-line"><span>R² score</span><strong>{{ metrics.r2_score }}</strong></div>
+          <div class="metric-line"><span>Test records</span><strong>{{ metrics.test_rows }}</strong></div>
+          <a class="linkbtn" href="{{ url_for('evaluation') }}">Open full model evaluation →</a>
+        {% else %}
+          <div class="empty" style="padding:12px 4px"><strong>Metrics not available yet</strong>
+            <p>Run <code>python train_model.py</code> to train the model and calculate metrics.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+{{ form_script() }}
+{% if result %}<script>RP.gauge(document.getElementById("gauge"), {{ result.delay }});</script>{% endif %}
+{% endblock %}
